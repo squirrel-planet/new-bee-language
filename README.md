@@ -1,2 +1,2 @@
 # new-bee-lang
-这里是 New Bee Lang 的仓库！
+这里是 New Bee Language 的仓库！
