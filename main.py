@@ -6,28 +6,36 @@ from typing import List
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding = 'utf-8')
 sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding = 'utf-8')
 
-def print_msg(string):
-    if '--only_output' not in sys.argv:
-        print(string)
+def print_msg(message_list, should_exit = False, color = '\033[0m', ignore_only_output = False):
+    if '--only-output' not in sys.argv or ignore_only_output:
+        if message_list:
+
+            def get_content(value, level = 0):
+                content = ''
+                for s in value:
+                    if isinstance(s, str):
+                        indent = level * '  '
+                        if '\n' in s:
+                            lines = s.split('\n')
+                            content += '\n' + indent + '·' + lines[0]
+                            for line in lines[1:]:
+                                content += '\n' + indent + line
+                        else:
+                            content += f'\n{indent}·{s}'
+                    else:
+                        content += get_content(s, level + 1)
+                return content
+
+            content = get_content(message_list)
+            print(f'\n{color}{content}\033[0m\n')
+    if should_exit:
+        sys.exit(1)
 
 def error(message_list: list) -> None:
-    if message_list:
-
-        def get_content(value, level = 0):
-            content = ''
-            for s in value:
-                if isinstance(s, str):
-                    content += f'\n{level * '  '}·{s}'
-                else:
-                    content += get_content(s, level + 1)
-            return content
-
-        content = get_content(message_list)
-        print(f'\n\033[31m{content}\033[0m\n')
-    sys.exit(1)
+    print_msg(message_list, should_exit = True, color = '\033[91m', ignore_only_output = True)
 
 class bee(object):
-    def __init__(self, type: str = 'egg', value: str | None = None):
+    def __init__(self, type: str = 'egg', value: str | int | None = None):
         self.type = type
         self.value = value
         self.is_slack = False
@@ -38,7 +46,7 @@ class bee(object):
         else:
             self.type = 'bee'
 
-class new_bee_lang_interpreter(object):
+class new_bee_language_interpreter(object):
     def __init__(self, code: str):
         self.line_number = 0
         self.code = code
@@ -46,7 +54,8 @@ class new_bee_lang_interpreter(object):
         self.goodbye = False
         self.honeycomb_stack: None | List[bee] = None
         self.workspace_stack: List[bee] = []
-        self.next_bee_value: str | None = None
+        self.sky_stack: List[bee] = []
+        self.next_bee_value: str | int | None = None
         self.judgment_value: List[bool] = []
         self.loop_break: List[bool] = []
         self.input_value = ''
@@ -56,7 +65,7 @@ class new_bee_lang_interpreter(object):
         self.encouragements = [
             '继续加油！你快要理解了... 才怪！',
             '哇！你又执行了一条指令！真是个天才！',
-            '你知道吗？你正在成为 New Bee Lang 专家的道路上... 走向深渊。',
+            '你知道吗？你正在成为 New Bee Language 专家的道路上... 走向深渊。',
             '你的代码正在运行，虽然结果是错误的。',
             '如果疼痛是学习的一部分，你现在已经是博士了。',
             '蜜蜂们为你的坚持感到骄傲（真的吗？）。',
@@ -107,12 +116,12 @@ class new_bee_lang_interpreter(object):
         if char:
             insults = [
                 f'你在干什么？！字符 “{char}” 不允许使用！',
-                f'你脑子里有蜜蜂吗？“{char}” 不是有效的 New Bee Lang 字符！',
+                f'你脑子里有蜜蜂吗？“{char}” 不是有效的 New Bee Language 字符！',
                 f'我没想到有人会笨到使用 “{char}”，但你做到了！',
                 f'“{char}” 这个字符不属于我们的语言！你完了！'
             ]
             full_message.append(random.choice(insults))
-            full_message.append(['有效字符: 字母 数字 空格 (character类型里填的除外)'])
+            full_message.append(['有效字符: 字母 数字 空格 运算符 (字符值、注释除外)'])
             full_message.append([f'你使用的: “{char}” (真是个天才选择呢)'])
         position = self.line_number
         if position:
@@ -121,7 +130,7 @@ class new_bee_lang_interpreter(object):
             full_message.append([f'操作: {operation}'])
             if 'init honeycomb' not in operation:
                 if isinstance(self.honeycomb_stack, list):
-                    full_message.append([f'当前栈深度: {len(self.honeycomb_stack)}'])
+                    full_message.append([f'当前蜂巢深度: {len(self.honeycomb_stack)}'])
         full_message.append(self.get_random_encouragement())
         error(['错误', full_message, '程序执行失败，蜜蜂们表示遗憾（并没有）'])
 
@@ -129,12 +138,22 @@ class new_bee_lang_interpreter(object):
         tokens = []
         current_token = ''
         in_quotes = False
-        for char in instruction:
+        i = 0
+        while i < len(instruction):
+            char = instruction[i]
             if char == "'":
                 if in_quotes:
-                    tokens.append("'" + current_token + "'")
-                    current_token = ''
-                    in_quotes = False
+                    backslash_count = 0
+                    j = i - 1
+                    while j >= 0 and instruction[j] == '\\':
+                        backslash_count += 1
+                        j -= 1
+                    if backslash_count % 2 == 1:
+                        current_token += "'"
+                    else:
+                        tokens.append("'" + current_token + "'")
+                        current_token = ''
+                        in_quotes = False
                 else:
                     if current_token:
                         tokens.append(current_token)
@@ -146,6 +165,7 @@ class new_bee_lang_interpreter(object):
                     current_token = ''
             else:
                 current_token += char
+            i += 1
         if current_token:
             tokens.append(current_token)
         return tokens
@@ -159,13 +179,28 @@ class new_bee_lang_interpreter(object):
                 continue
             if line.strip().startswith('#'):
                 continue
-            for char in line:
-                if char not in '#abcdefghijklmnopqrstuvwxyzNBL +-*/"\'\n\t' and line[line.index(char) - 1] != "'":
+            in_quotes = False
+            i = 0
+            while i < len(line):
+                char = line[i]
+                if char == "'":
+                    if in_quotes:
+                        backslash_count = 0
+                        j = i - 1
+                        while j >= 0 and line[j] == '\\':
+                            backslash_count += 1
+                            j -= 1
+                        if backslash_count % 2 == 0:
+                            in_quotes = False
+                    else:
+                        in_quotes = True
+                elif not in_quotes and char not in '#0123456789abcdefghijklmnopqrstuvwxyzNBL +-*/"\'\n\t\\':
                     self.error_with_details(
-                        [f'字符 “{char}” 不允许使用'],
-                        char = char,
-                        error_type = 'syntax'
+                        [f'字符 "{char}" 不允许使用'],
+                        char=char,
+                        error_type='syntax'
                     )
+                i += 1
             tokens.append(self.parse_tokens(line))
             if tokens[-1][0] == 'please':
                 please_count += 1
@@ -200,10 +235,10 @@ class new_bee_lang_interpreter(object):
             self.run_line(line_tokens)
         if not self.goodbye:
             self.error_with_details([
-                '你没有告别！程序必须以 goodbye New Bee Lang 结尾！',
-                '这是 New Bee Lang 的基本礼仪！',
+                '你没有告别！程序必须以 goodbye New Bee Language 结尾！',
+                '这是 New Bee Language 的基本礼仪！',
                 '没有告别，蜜蜂们会伤心的！',
-                '请在你的代码结尾添加: goodbye New Bee Lang',
+                '请在你的代码结尾添加: goodbye New Bee Language',
                 'P.S. 蜜蜂们期待你的下次光临（并不）！'
             ])
         if self.judgment_value or self.loop_break:
@@ -237,27 +272,50 @@ class new_bee_lang_interpreter(object):
         if self.honeycomb_stack is None:
             if cmd:
                 self.uninit_error(cmd)
-        else:
+        elif self.honeycomb_stack:
             return self.honeycomb_stack[-1]
+        else:
+            self.error_with_details(['看来某人正在操作空蜂巢呢！'])
         return bee()
 
-    def input(self) -> str:
-        if self.input_value:
-            input_first = self.input_value[0]
-            self.input_value = self.input_value[1:]
-            return input_first
-        else:
+    def input(self) -> str | int:
+        if not self.input_value:
             self.input_value = input()
-            input_first = self.input_value[0]
+        first = self.input_value[0]
+        if first.isdigit():
+            i = 0
+            while i < len(self.input_value) and self.input_value[i].isdigit():
+                i += 1
+            result = int(self.input_value[:i])
+            self.input_value = self.input_value[i:]
+            return result
+        else:
             self.input_value = self.input_value[1:]
-            return input_first
+            return first
 
     def give_up(self):
-        print_msg('\n程序结束。再见，愚蠢的人类！蜜蜂们要去采蜜了。')
+        print_msg(['程序结束。再见，愚蠢的人类！蜜蜂们要去采蜜了。'])
         sys.exit(0)
 
     def is_working_bee_slack(self) -> bool:
         return self.workspace_stack[-1].is_slack
+
+    def has_queen_bee(self, stack: List[bee], exclude: bee | None = None) -> bool:
+        for b in stack:
+            if b.type == 'queen bee' and b is not exclude:
+                return True
+        return False
+
+    def has_alive_queen_elsewhere(self, exclude: bee | None = None) -> bool:
+        stacks = []
+        if self.honeycomb_stack is not None:
+            stacks.append(self.honeycomb_stack)
+        stacks.append(self.workspace_stack)
+        stacks.append(self.sky_stack)
+        for stack in stacks:
+            if self.has_queen_bee(stack, exclude):
+                return True
+        return False
 
     def run_line(self, tokens: List[str]) -> None:
         self.line_number += 1
@@ -270,9 +328,9 @@ class new_bee_lang_interpreter(object):
         cmd = tokens[0]
         length = len(tokens)
         if cmd == 'hello':
-            if tokens[1:] != ['New', 'Bee', 'Lang']:
+            if tokens[1:] != ['New', 'Bee', 'Language']:
                 self.error_with_details([
-                    'hello 后面只能是 New Bee Lang！'
+                    'hello 后面只能是 New Bee Language！'
                 ])
             if self.hello:
                 self.error_with_details([
@@ -303,9 +361,7 @@ class new_bee_lang_interpreter(object):
                 if self.loop_break:
                     if self.loop_break[-1]:
                         return
-                if length > 2:
-                    self.too_long_code_error(tokens[2:], tokens)
-                elif length < 2:
+                if length < 2:
                     self.too_short_code_error('judgment')
                 elif self.workspace_stack[-1].type != 'worker bee':
                     self.bee_error('judgment')
@@ -314,10 +370,37 @@ class new_bee_lang_interpreter(object):
                 elif self.honeycomb_stack is None:
                     self.uninit_error('judgment')
                 elif tokens[1] == 'start':
-                    if self.honeycomb_end().value != '0':
+                    if length > 2:
+                        self.too_long_code_error(tokens[2:], tokens)
+                    val = self.honeycomb_end('judgment start').value
+                    if val is not None and val != '0' and val != 0:
                         self.judgment_value.append(True)
                     else:
                         self.judgment_value.append(False)
+                elif tokens[1] in ['<', '>', '<=', '>=', '==', '!=']:
+                    if length < 3:
+                        self.too_short_code_error('judgment')
+                    elif length > 3:
+                        self.too_long_code_error(tokens[3:], tokens)
+                    elif tokens[2] != 'start':
+                        self.error_with_details([f'judgment 语法错误！'], 'judgment')
+                    elif len(self.honeycomb_stack) < 2:
+                        self.error_with_details(
+                            ['蜂巢中的蜜蜂数量不足以进行比较运算！'],
+                            f'judgment {tokens[1]}'
+                        )
+                    else:
+                        op = tokens[1]
+                        bee1, bee2 = self.honeycomb_stack[-2], self.honeycomb_stack[-1]
+                        value1, value2 = bee1.value, bee2.value
+                        if not isinstance(value1, int) or not isinstance(value2, int):
+                            self.error_with_details(
+                                ['只有数字才能参与比较运算！'],
+                                f'judgment {op}'
+                            )
+                        exp = f'{value1} {op} {value2}'
+                        result = eval(exp)
+                        self.judgment_value.append(bool(result))
                 elif tokens[1] == 'end':
                     if not self.judgment_value:
                         self.not_have_start_error('judgment')
@@ -333,9 +416,9 @@ class new_bee_lang_interpreter(object):
                 if not self.judgment_value[-1]:
                     return
             if cmd == 'goodbye':
-                if tokens[1:] != ['New', 'Bee', 'Lang']:
+                if tokens[1:] != ['New', 'Bee', 'Language']:
                     self.error_with_details(
-                        ['goodbye 后面只能是 New Bee Lang！']
+                        ['goodbye 后面只能是 New Bee Language！']
                     )
                 if self.goodbye:
                     self.error_with_details([
@@ -362,7 +445,23 @@ class new_bee_lang_interpreter(object):
                             ['蜂巢里没有蜜蜂！你没法使用 call 命令！'],
                             operation = 'call'
                         )
-                    self.workspace_stack.append(self.honeycomb_end())
+                    bee_to_call = self.honeycomb_end('call')
+                    if bee_to_call.type == 'egg':
+                        self.error_with_details(
+                            ['egg 不能 call！', '卵都还没孵化呢，怎么叫它干活？'],
+                            operation = 'call'
+                        )
+                    if bee_to_call.type == 'young bee':
+                        self.error_with_details(
+                            ['young bee 不能 call！', '羽翼未丰，叫来也干不了活！'],
+                            operation = 'call'
+                        )
+                    if bee_to_call.type == 'queen bee' and self.has_queen_bee(self.workspace_stack):
+                        self.error_with_details(
+                            ['冲突！一个工作区不能有多个 queen bee！'],
+                            operation = 'call'
+                        )
+                    self.workspace_stack.append(bee_to_call)
                     self.honeycomb_stack = self.honeycomb_stack[0:-1]
                 else:
                     self.uninit_error('call')
@@ -384,15 +483,8 @@ class new_bee_lang_interpreter(object):
                 elif self.workspace_stack[-1].type == 'queen bee':
                     if not self.honey:
                         self.error_with_details(['没有蜂蜜了！后悔没有使用 get honey 命令吧！'], 'lay egg')
-                    if isinstance(self.next_bee_value, str):
-                        if len(self.next_bee_value) >= 2:
-                            bee_value_first = self.next_bee_value[0]
-                            self.next_bee_value = self.next_bee_value[1:]
-                        else:
-                            bee_value_first = self.next_bee_value
-                            self.next_bee_value = None
-                    else:
-                        bee_value_first = None
+                    bee_value_first = self.next_bee_value
+                    self.next_bee_value = None
                     self.honeycomb_stack.append(bee('egg', bee_value_first))
                     self.honey -= 1
                 elif self.is_working_bee_slack():
@@ -401,7 +493,7 @@ class new_bee_lang_interpreter(object):
                     self.bee_error('lay egg', 'queen bee')
             elif cmd == 'sleep':
                 if self.honeycomb_stack is not None:
-                    if self.honeycomb_end().type == 'egg':
+                    if self.honeycomb_end('sleep').type == 'egg':
                         self.honeycomb_stack[-1].grow_up()
                     else:
                         self.error_with_details([f'{self.honeycomb_stack[-1].type} 不能睡觉！'], 'sleep')
@@ -411,7 +503,7 @@ class new_bee_lang_interpreter(object):
                     self.too_long_code_error(tokens[1:], tokens)
             elif cmd == 'eat':
                 if self.honeycomb_stack is not None:
-                    if self.honeycomb_end().type == 'young bee':
+                    if self.honeycomb_end('eat').type == 'young bee':
                         self.honeycomb_stack[-1].grow_up()
                         self.honey -= 1
                     else:
@@ -436,12 +528,20 @@ class new_bee_lang_interpreter(object):
                     self.too_short_code_error('get')
                 elif tokens[1] != 'honey':
                     self.error_with_details([f'无法获取 {tokens[1]}！'], f'get {tokens[1]}')
-                elif self.workspace_stack[-1] != 'worker bee':
+                elif self.workspace_stack[-1].type != 'worker bee':
                     self.bee_error('get honey')
                 elif self.is_working_bee_slack():
                     self.slack_error('get honey')
                 else:
                     self.honey += 1
+            elif cmd == 'input':
+                if length > 1:
+                    self.too_long_code_error(tokens[1:], tokens)
+                self.next_bee_value = self.input()
+            elif cmd == 'random':
+                if length > 1:
+                    self.too_long_code_error(tokens[1:], tokens)
+                self.next_bee_value = random.randint(0, 9)
             elif cmd == 'set':
                 if length > 4 and tokens[1] == 'type':
                     self.too_long_code_error(tokens[4:], tokens)
@@ -458,7 +558,13 @@ class new_bee_lang_interpreter(object):
                         )
                     if self.honeycomb_stack[-1].value is not None and tokens[2:] == ['worker', 'bee']:
                         self.error_with_details(['有值的蜂蜜不能设置 type 为 worker bee 类型！'], 'set type')
-                    if tokens[2:] in [['bee'], ['worker', 'bee']]:
+                    if tokens[2:] == ['queen', 'bee']:
+                        if self.has_queen_bee(self.honeycomb_stack, self.honeycomb_stack[-1]):
+                            self.error_with_details(
+                                ['冲突！一个蜂巢不能有多个 queen bee！'], 'set type'
+                            )
+                        self.honeycomb_stack[-1].type = 'queen bee'
+                    elif tokens[2:] in [['bee'], ['worker', 'bee']]:
                         self.honeycomb_stack[-1].type = ' '.join(tokens[2:])
                     else:
                         self.error_with_details([f'你不能设置 {' '.join(tokens[2:])} 这个 type'], 'set type')
@@ -467,23 +573,26 @@ class new_bee_lang_interpreter(object):
                         self.bee_error('set value')
                     elif self.is_working_bee_slack():
                         self.slack_error('set value')
-                    if tokens[2] not in ['input', 'random']:
+                    raw = tokens[2]
+                    value = None
+                    parsed = None
+                    if raw == 'random':
+                        value = random.randint(0, 9)
+                    else:
                         try:
-                            tokens[2] = eval(tokens[2])
+                            parsed = eval(raw)
                         except:
-                            self.error_with_details(['设置的值不正确'], f'set value {tokens[2]}')
-                    if tokens[2] == 'input':
-                        tokens[2] = self.input()
-                    if tokens[2] == 'random':
-                        tokens[2] = str(random.randint(0, 9))
-                    value = tokens[2] if len(tokens[2]) == 1 else self.error_with_details(
-                        ['设置的值不正确'],
-                        f'set value {tokens[2]}'
-                    )
-                    if isinstance(value, str):
-                        if len(value) != 1:
-                            self.error_with_details([['设置的值不正确'], f'set value {tokens[2]}'])
+                            self.error_with_details(['设置的值不正确'], f"set value {raw}")
+                        if isinstance(parsed, int):
+                            value = parsed
+                        elif isinstance(parsed, str) and len(parsed) >= 1:
+                            value = parsed
+                        else:
+                            self.error_with_details(['设置的值不正确'], f"set value {raw}")
+                    if self.honeycomb_stack:
                         self.honeycomb_stack[-1].value = value
+                    else:
+                        self.error_with_details(['蜂巢是空的'], f"set value s{raw}")
             elif cmd == 'output':
                 if length > 1:
                     self.too_long_code_error(tokens[1:], tokens)
@@ -491,7 +600,7 @@ class new_bee_lang_interpreter(object):
                     self.bee_error('output')
                 elif self.is_working_bee_slack():
                     self.slack_error('output')
-                output_value = self.honeycomb_end().value
+                output_value = self.honeycomb_end('output').value
                 if output_value is None:
                     self.error_with_details(['你没有设置值，无法输出！'], 'output')
                 print(output_value, end = '')
@@ -501,6 +610,11 @@ class new_bee_lang_interpreter(object):
                         if self.honeycomb_stack is None:
                             self.uninit_error('go back')
                         else:
+                            if self.workspace_stack[-1].type == 'queen bee' and self.has_queen_bee(self.honeycomb_stack):
+                                self.error_with_details(
+                                    ['冲突！一个蜂巢不能有多个 queen bee！'],
+                                    'go back'
+                                )
                             self.honeycomb_stack.append(self.workspace_stack[-1])
                             self.workspace_stack = self.workspace_stack[:-1]
                     else:
@@ -509,15 +623,62 @@ class new_bee_lang_interpreter(object):
                     self.too_short_code_error('go')
                 if length > 2:
                     self.too_long_code_error(tokens[2:], tokens)
+            elif cmd == 'fly':
+                if length > 2:
+                    self.too_long_code_error(tokens[2:], tokens)
+                elif length == 2:
+                    if tokens[1] == 'back':
+                        if self.honeycomb_stack is None:
+                            self.uninit_error('fly back')
+                        elif not self.sky_stack:
+                            self.error_with_details(['天空中一只蜜蜂都没有！无法 fly back！'], 'fly back')
+                        else:
+                            if self.sky_stack[-1].type == 'queen bee' and self.has_queen_bee(self.honeycomb_stack):
+                                self.error_with_details(
+                                    ['冲突！一个蜂巢不能有多个 queen bee！'],
+                                    'fly back'
+                                )
+                            self.honeycomb_stack.append(self.sky_stack[-1])
+                            self.sky_stack = self.sky_stack[:-1]
+                    else:
+                        self.error_with_details([f'你想飞 {tokens[1]}？不可能！'], f'fly {tokens[1]}')
+                else:
+                    if self.honeycomb_stack is None:
+                        self.uninit_error('fly')
+                    elif not self.honeycomb_stack:
+                        self.error_with_details(['蜂巢里没有蜜蜂！无法 fly！'], 'fly')
+                    else:
+                        bee_to_fly = self.honeycomb_end('fly')
+                        if bee_to_fly.type == 'egg':
+                            self.error_with_details(
+                                ['egg 不能 fly！', '连翅膀都没长出来呢，飞什么飞？'],
+                                operation = 'fly'
+                            )
+                        elif bee_to_fly.type == 'young bee':
+                            self.error_with_details(
+                                ['young bee 不能 fly！', '羽翼未丰，想飞还早着呢！'],
+                                operation = 'fly'
+                            )
+                        if bee_to_fly.type == 'queen bee' and self.has_queen_bee(self.sky_stack):
+                            self.error_with_details(
+                                ['冲突！天空中不能有多个 queen bee！'],
+                                'fly'
+                            )
+                        self.sky_stack.append(bee_to_fly)
+                        self.honeycomb_stack = self.honeycomb_stack[:-1]
             elif cmd == 'kill':
                 if self.honeycomb_stack is None:
                     self.uninit_error('kill')
-                elif self.honeycomb_end().type == 'queen bee':
-                    self.error_with_details([
-                        '你真是太聪明了！你把蜂后杀掉了！',
-                        '蜂后驾崩了！',
-                        '这就像你的代码生涯一样，尚未开始就已结束。'
-                    ], 'kill')
+                elif self.honeycomb_end('kill').type == 'queen bee':
+                    this_bee = self.honeycomb_stack[-1]
+                    if self.has_alive_queen_elsewhere(this_bee):
+                        self.honeycomb_stack.pop()
+                    else:
+                        self.error_with_details([
+                            '所有 queen bee 都驾崩了！',
+                            '蜂后驾崩，王朝终结！',
+                            '这就像你的代码生涯一样，尚未开始就已结束。'
+                        ], 'kill')
                 else:
                     self.honeycomb_stack.pop()
             elif cmd == 'all':
@@ -531,11 +692,12 @@ class new_bee_lang_interpreter(object):
                         while self.honeycomb_stack:
                             this_bee = self.honeycomb_stack.pop()
                             if this_bee.type == 'queen bee':
-                                self.error_with_details([
-                                    '你真是太聪明了！你把蜂后杀掉了！',
-                                    '蜂后驾崩了！',
-                                    '这就像你的代码生涯一样，尚未开始就已结束。'
-                                ], 'all kill')
+                                if not self.has_alive_queen_elsewhere():
+                                    self.error_with_details([
+                                        '所有 queen bee 都驾崩了！',
+                                        '蜂后驾崩，王朝终结！',
+                                        '这就像你的代码生涯一样，尚未开始就已结束。'
+                                    ], 'all kill')
                     else:
                         self.error_with_details([f'没人知道 {thing} 是什么命令，蜂蜜们同样如此。'])
                 else:
@@ -555,18 +717,18 @@ class new_bee_lang_interpreter(object):
                     op = tokens[1]
                     bee1, bee2 = self.honeycomb_stack[-2], self.honeycomb_stack[-1]
                     value1, value2 = bee1.value, bee2.value
-                    exp = f'{value1} {op} {value2}'
                     if op not in ['+', '-', '*', '/']:
                         self.error_with_details([f'“{op} 是什么运算符？！”蜂蜜大喊道。'], f'compute {op}')
-                    if value2 == '0' and op == '/':
-                        self.error_with_details(['你想毁灭世界吗？！居然除以 0！'], 'compute /')
-                    try:
-                        self.next_bee_value = str(eval(exp))
-                    except TypeError:
+                    if not isinstance(value1, int) or not isinstance(value2, int):
                         self.error_with_details(
-                            [f'蜂蜜飞了过来，说：“嗡嗡”（你太菜了），因为 {value1} 与 {value2} 不能进行 {op} 运算！'],
+                            ['只有数字才能参与运算！', '字符类型的蜜蜂不能做算术！'],
                             f'compute {op}'
                         )
+                    if value2 == 0 and op == '/':
+                        self.error_with_details(['你想毁灭世界吗？！居然除以 0！'], 'compute /')
+                    exp = f'{value1} {op} {value2}'
+                    try:
+                        self.next_bee_value = eval(exp)
                     except Exception:
                         self.error_with_details(
                             ['看来计算出错了！蜜蜂们感同身受（难道你信吗？）！'],
@@ -603,26 +765,6 @@ class new_bee_lang_interpreter(object):
                         else:
                             self.error_with_details(['蜂巢内有的蜂蜜没有值，无法报错'])
                     error([''.join(error_list), '这是你要求的！'])
-            elif cmd == 'swap':
-                if length > 1:
-                    self.too_long_code_error(tokens[1:], tokens)
-                else:
-                    (
-                        self.workspace_stack[-1],
-                        self.workspace_stack[-2]
-                    ) = (
-                        self.workspace_stack[-2],
-                        self.workspace_stack[-1]
-                    )
-            elif cmd == 'get':
-                if length > 2:
-                    self.too_long_code_error(tokens[2:], tokens)
-                elif length < 2:
-                    self.too_short_code_error('get')
-                elif tokens[1] != 'honey':
-                    self.error_with_details([f'不能执行 get {tokens[1]} 命令！'], f'get {tokens[1]}')
-                else:
-                    self.honey += 1
             else:
                 self.error_with_details(
                     [f'命令 {' '.join(tokens)} 是什么意思！？蜜蜂不语，只是一味的报错'],
@@ -630,10 +772,10 @@ class new_bee_lang_interpreter(object):
                 )
         else:
             self.error_with_details([
-                '你没有打招呼！程序必须以 hello New Bee Lang 开头！',
-                '这是 New Bee Lang 的基本礼仪！',
+                '你没有打招呼！程序必须以 hello New Bee Language 开头！',
+                '这是 New Bee Language 的基本礼仪！',
                 '没有问候，就没有代码运行!',
-                '请在你的代码开头添加: hello New Bee Lang',
+                '请在你的代码开头添加: hello New Bee Language',
                 'P.S. 蜜蜂们不会欢迎粗鲁的程序员！'
             ])
         if cmd != 'hello' and not self.do_not_give_up:
@@ -647,10 +789,11 @@ class new_bee_lang_interpreter(object):
         self.do_not_slack -= 1
 
 def main() -> None:
+    print('\033[0m')
     if len(sys.argv) < 2:
         error(
-            ['错误: 没有填入参数', '请使用: python New_Bee_Lang.py <file_name>',
-            '示例: python New_Bee_Lang.py hello_world.nbl']
+            ['错误: 没有填入参数', '请使用: python New_Bee_Language.py <file_name>',
+            '示例: python New_Bee_Language.py hello_world.nbl']
         )
     file_path = sys.argv[1]
     try:
@@ -662,9 +805,9 @@ def main() -> None:
     except Exception:
         code = ''
         error(['读取文件失败，蜜蜂们表示同情（并没有）'])
-    interpreter = new_bee_lang_interpreter(code)
+    interpreter = new_bee_language_interpreter(code)
     interpreter.run()
-    print_msg('\n程序结束。再见，愚蠢的人类！蜜蜂们要去采蜜了。')
+    print_msg(['程序结束。再见，愚蠢的人类！蜜蜂们要去采蜜了。'])
 
 if __name__ == '__main__':
     main()
